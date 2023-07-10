@@ -7,6 +7,7 @@ from sklearn.cluster import KMeans
 import numpy as np
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.cluster import DBSCAN
+from sklearn.mixture import GaussianMixture
 
 sample_values = []
 def preprocessing(df):
@@ -14,9 +15,10 @@ def preprocessing(df):
     mask = df.isnull().any(axis=1)
     filtered_df = df[~mask]
     replace_it = True if (len(filtered_df) < 100) else False
-    simple_random_sample = filtered_df.sample(n=100, random_state=190, replace= replace_it)
+    simple_random_sample = filtered_df.sample(n=100, random_state=1090, replace= replace_it)
     df = simple_random_sample
     sample_values = df.iloc[0].values.tolist()
+    
     string_values = []
 
     #combining values and appending together into a single array
@@ -64,18 +66,24 @@ def agglomerative_clustering(features):
     return table
 
 def dbscan_clustering(features):
-    clustering = DBSCAN(eps=25, min_samples=2).fit(features)
+    clustering = DBSCAN(eps=25, min_samples=4).fit(features)
     table = add_to_table(clustering.labels_, 'dbscan')
+    return table
+
+def gausian_clustering(features):
+    gmm = GaussianMixture(n_components=5)
+    gmm.fit(features)
+    labels = gmm.predict(features)
+    table = add_to_table(labels, 'gmm')
     return table
 
 nlp = spacy.load('en_core_web_md')
 # connecting to database
-rowcount = 100
 conn = create_engine('postgresql://postgres:password@localhost:5434/database1')
 #query for first dataset
-query1 = "SELECT * FROM public.order_items LIMIT %s" % rowcount
+query1 = "SELECT * FROM public.geolocation"
 #query for second dataset
-query2 = "SELECT * FROM public.order_payments LIMIT %s" % rowcount
+query2 = "SELECT * FROM public.sellers"
 
 df1 = pd.read_sql_query(query1.replace('%', '%%'), con = conn)
 df2 = pd.read_sql_query(query2.replace('%', '%%'), con = conn)
@@ -99,7 +107,12 @@ kmeans_result = kmeans_clustering(data)
 #agglomerative clustering (heirarchial-clustering)
 agglo_result = agglomerative_clustering(data)
 
+#gaussian mixture model clustering
+gmm_result = gausian_clustering(data)
+
 #dbscan (density based)
 dbscan_result = dbscan_clustering(data)
+empty_row = pd.Series([' '] * len(dbscan_result.columns), index=dbscan_result.columns)
+position = len(df1.columns)
+dbscan_result = pd.concat([dbscan_result.iloc[:position], pd.DataFrame([empty_row]), dbscan_result.iloc[position:]]).reset_index(drop=True)
 print(dbscan_result)
-
